@@ -14,6 +14,7 @@ import { useIntl, useLocale } from "@/locale";
 import type { EditBill } from "@/store/ledger";
 import { usePreferenceStore } from "@/store/preference";
 import { cn } from "@/utils";
+import { getPredictNow } from "@/utils/predict";
 import { showCategoryList } from "../category";
 import { CategoryItem } from "../category/item";
 import { DatePicker } from "../date-picker";
@@ -32,6 +33,7 @@ import {
     SelectValue,
 } from "../ui/select";
 import { goAddBill } from ".";
+import { RemarkHint } from "./remark";
 
 const defaultBill = {
     type: "expense" as Bill["type"],
@@ -56,9 +58,38 @@ export default function EditorForm({
 
     const { baseCurrency, convert } = useCurrency();
 
+    const { incomes, expenses, categories: allCategories } = useCategory();
+
+    const isCreate = edit === undefined;
+
+    const predictCategory = useMemo(() => {
+        // 只有新增账单时才展示预测
+        if (!isCreate) {
+            return;
+        }
+        const predict = getPredictNow();
+        const pc = predict?.category?.[0];
+        if (!pc) {
+            return;
+        }
+        const category = allCategories.find((v) => v.id === pc);
+        return category;
+    }, [isCreate, allCategories]);
+
+    const predictComments = useMemo(() => {
+        // 只有新增账单时才展示预测
+        if (!isCreate) {
+            return;
+        }
+        const predict = getPredictNow();
+        const pc = predict?.comment;
+        return pc;
+    }, [isCreate]);
+
     const [billState, setBillState] = useState(() => {
         const init = {
             ...defaultBill,
+            categoryId: predictCategory?.id ?? defaultBill.categoryId,
             time: Date.now(),
             ...edit,
         };
@@ -67,11 +98,6 @@ export default function EditorForm({
         }
         return init;
     });
-
-    // useEffect(() => {
-    // 	setBillState({ ...defaultBill, ...edit });
-    // }, [edit]);
-    const { incomes, expenses } = useCategory();
 
     const { tags, add: addTag } = useTag();
 
@@ -145,8 +171,18 @@ export default function EditorForm({
           ? amountToNumber(billState?.amount)
           : 0;
 
+    const multiplyKey = usePreferenceStore((v) => {
+        if (!v.multiplyKey || v.multiplyKey === "off") {
+            return undefined;
+        }
+        if (v.multiplyKey === "double-zero") {
+            return "double-zero";
+        }
+        return "triple-zero";
+    });
     return (
         <Calculator.Root
+            multiplyKey={multiplyKey}
             initialValue={calculatorInitialValue}
             onValueChange={(n) => {
                 setBillState((v) => {
@@ -245,7 +281,7 @@ export default function EditorForm({
                             >
                                 <div className="flex items-center">
                                     <SelectTrigger className="w-fit outline-none ring-none border-none shadow-none p-0 [&_svg]:hidden">
-                                        <div className="flex items-center text-2xl text-white">
+                                        <div className="flex items-center font-semibold text-2xl text-white">
                                             {targetCurrency?.symbol}
                                         </div>
                                     </SelectTrigger>
@@ -319,7 +355,7 @@ export default function EditorForm({
                                     `rounded-lg border flex-1 py-1 px-2 h-8 flex gap-2 items-center justify-center whitespace-nowrap cursor-pointer`,
                                 )}
                                 onClick={() => {
-                                    showCategoryList();
+                                    showCategoryList(billState.type);
                                 }}
                             >
                                 <i className="icon-[mdi--settings]"></i>
@@ -512,21 +548,31 @@ export default function EditorForm({
                                 />
                             </div>
                         </div>
-                        <div className="flex h-full flex-1">
-                            <IOSUnscrolledInput
-                                value={billState.comment}
-                                onChange={(e) => {
-                                    setBillState((v) => ({
-                                        ...v,
-                                        comment: e.target.value,
-                                    }));
-                                }}
-                                type="text"
-                                className="w-full bg-transparent text-white text-right placeholder-opacity-50 outline-none"
-                                placeholder={t("comment")}
-                                enterKeyHint="done"
-                            />
-                        </div>
+                        <RemarkHint
+                            recommends={predictComments}
+                            onSelect={(v) => {
+                                setBillState((prev) => ({
+                                    ...prev,
+                                    comment: `${prev.comment} ${v}`,
+                                }));
+                            }}
+                        >
+                            <div className="flex h-full flex-1">
+                                <IOSUnscrolledInput
+                                    value={billState.comment}
+                                    onChange={(e) => {
+                                        setBillState((v) => ({
+                                            ...v,
+                                            comment: e.target.value,
+                                        }));
+                                    }}
+                                    type="text"
+                                    className="w-full bg-transparent text-white text-right placeholder-opacity-50 outline-none"
+                                    placeholder={t("comment")}
+                                    enterKeyHint="done"
+                                />
+                            </div>
+                        </RemarkHint>
                     </div>
 
                     <button
@@ -537,7 +583,7 @@ export default function EditorForm({
                         <i className="icon-[mdi--check] icon-md"></i>
                     </button>
                     <Calculator.Keyboard
-                        className={cn("flex-1 grid-cols-[2fr_2fr_2fr_1fr_1fr]")}
+                        className={cn("flex-1")}
                         onKey={(v) => {
                             if (v === "r") {
                                 toConfirm();

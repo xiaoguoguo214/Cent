@@ -1,4 +1,4 @@
-import { StorageAPI } from "@/api/storage";
+import { StorageAPI, StorageDeferredAPI } from "@/api/storage";
 import PopupLayout from "@/layouts/popup-layout";
 import { useIntl } from "@/locale";
 import { useUserStore } from "@/store/user";

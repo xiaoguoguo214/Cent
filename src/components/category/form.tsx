@@ -60,7 +60,6 @@ export default function CategoryEditForm({
         if (edit === undefined || edit.id === undefined) {
             return {
                 name: "",
-                customName: true,
                 type: edit?.type ?? "expense",
                 color: "#fff",
                 icon: ICONS[0].icons[0].className,
@@ -109,18 +108,12 @@ export default function CategoryEditForm({
         }
         const originCate = {
             icon: edit.icon,
-            name: edit.customName ? edit.name : t(edit.name),
+            name: edit.name,
             parent: edit.parent,
         };
         const formattedData = {
             ...data,
             icon: category?.icon,
-            customName:
-                edit.customName === true
-                    ? true
-                    : originCate.name !== data.name
-                      ? true
-                      : undefined,
         };
         if (
             originCate.icon === formattedData.icon &&
@@ -217,9 +210,10 @@ export default function CategoryEditForm({
                             control={form.control}
                             name="parent"
                             render={({ field }) => {
+                                const fieldValue = form.getValues("parent");
                                 const selectValue =
-                                    field.value === undefined ||
-                                    field.value === null
+                                    fieldValue === undefined ||
+                                    fieldValue === null
                                         ? NO_PARENT
                                         : field.value;
                                 return (
@@ -363,6 +357,7 @@ export default function CategoryEditForm({
                                 </div>
                                 <textarea
                                     className="w-full flex-1 border rounded-lg p-2"
+                                    placeholder={`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12z"/></svg>`}
                                     onChange={(e) => {
                                         const svgText = e.currentTarget.value;
                                         if (

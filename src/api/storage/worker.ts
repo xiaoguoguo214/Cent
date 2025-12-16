@@ -2,7 +2,13 @@
 declare const self: DedicatedWorkerGlobalScope;
 
 import { expose, transfer } from "comlink";
-import { StashBucket } from "@/database/stash";
+import {
+    clear as clearModels,
+    getPredictModelMeta,
+    learn,
+    predict,
+} from "@/api/predict/linear-predict";
+import { type Full, StashBucket } from "@/database/stash";
 import { BillIndexedDBStorage } from "@/database/storage";
 import type { Bill, BillFilter, ExportedJSON, GlobalMeta } from "@/ledger/type";
 import { isBillMatched } from "@/ledger/utils";
@@ -11,25 +17,37 @@ import { type AnalysisType, analysis as analysisBills } from "./analysis";
 
 const storeMap = new Map<
     string,
-    { itemStorage: BillIndexedDBStorage; itemBucket: StashBucket<Bill> }
+    {
+        itemStorage: BillIndexedDBStorage;
+        itemBucket: StashBucket<Bill>;
+    }
 >();
+
 const getDB = (storeFullName: string) => {
+    const stored = storeMap.get(storeFullName);
     const itemStorage =
-        storeMap.get(storeFullName)?.itemStorage ??
+        stored?.itemStorage ??
         new BillIndexedDBStorage(`book-${storeFullName}`);
     const itemBucket =
-        storeMap.get(storeFullName)?.itemBucket ??
+        stored?.itemBucket ??
         new StashBucket(
             itemStorage.createArrayableStorage,
             itemStorage.createStorage,
         );
-    storeMap.set(storeFullName, { itemStorage, itemBucket });
+    storeMap.set(storeFullName, { ...stored, itemStorage, itemBucket });
     return { itemBucket };
 };
 
+/** 获取所有数据，再通过Array.filter过滤 */
 const filter = async (storeFullName: string, rule: BillFilter) => {
     const items = await getDB(storeFullName).itemBucket.getItems();
     return items.filter((v) => isBillMatched(v, rule));
+};
+
+/** 仅获取前x条数据 */
+const truncate = async (storeFullName: string, limit: number) => {
+    const items = await getDB(storeFullName).itemBucket.getItems(limit);
+    return items;
 };
 
 const getInfo = async (storeFullName: string) => {
@@ -91,12 +109,48 @@ const exportToArrayBuffer = async (storeFullName: string) => {
     );
 };
 
+const startLearn = async (
+    storeFullName: string,
+    creators: BillFilter["creators"],
+) => {
+    // 找到新增的账单数据，喂给模型学习
+    const meta = await getPredictModelMeta(storeFullName);
+    const newBills = await (async () => {
+        if (!meta?.timeRange) {
+            return filter(storeFullName, { creators });
+        }
+        return filter(storeFullName, {
+            start: meta.timeRange[1] + 1,
+            creators,
+        });
+    })();
+    if (newBills.length === 0) {
+        return;
+    }
+    console.log(`start learning new ${newBills.length} bills`);
+    const endTime = newBills[0]?.time;
+    const startTime = newBills[newBills.length - 1]?.time;
+    await learn(storeFullName, newBills, { timeRange: [startTime, endTime] });
+};
+
+const startPredict = async (
+    storeFullName: string,
+    target: "category" | "comment",
+    time = Date.now(),
+) => {
+    return predict(storeFullName, target, time);
+};
+
 const exposed = {
     init: (v: any) => {},
     getInfo,
     filter,
     analysis,
     exportToArrayBuffer,
+    learn: startLearn,
+    predict: startPredict,
+    clearModels,
+    truncate,
 };
 
 export type Exposed = typeof exposed;

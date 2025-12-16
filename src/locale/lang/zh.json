@@ -417,5 +417,16 @@
   "quick-add-when-reduce-motion-changed": "【减弱动态效果】变化时读取剪贴板快速记账",
   "quick-entry-success": "快速添加记账成功",
   "read-bill-from-clipboard": "从剪贴板获取记账数据",
-  "read-clipboard": "读取"
+  "read-clipboard": "读取",
+  "comment-cloud": "高频词",
+  "loading": "加载中",
+  "no-comment-cloud": "暂无高频",
+  "recommend-comments": "推荐备注：",
+  "smart-predict": "智能预测",
+  "smart-predict-tip": "记账时根据时间预测可能的类别和备注",
+  "more-functions": "更多功能",
+  "bill-record-settings": "记账设置",
+  "multiply-key": "乘数键",
+  "multiply-key-tip": "在记账时快速输入多个0",
+  "off": "关闭"
 }

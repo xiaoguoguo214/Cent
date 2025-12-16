@@ -1,7 +1,14 @@
 import dayjs from "dayjs";
-import { useMemo, useRef } from "react";
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+} from "react";
 import { useShallow } from "zustand/shallow";
 import { StorageAPI } from "@/api/storage";
+import CloudLoopIcon from "@/assets/icons/cloud-loop.svg?react";
 import AnimatedNumber from "@/components/animated-number";
 import BudgetCard from "@/components/budget/card";
 import { HintTooltip } from "@/components/hint";
@@ -19,6 +26,8 @@ import { useUserStore } from "@/store/user";
 import { cn } from "@/utils";
 import { filterOrderedBillListByTimeRange } from "@/utils/filter";
 
+let ledgerAnimationShows = false;
+
 export default function Page() {
     const t = useIntl();
 
@@ -30,7 +39,7 @@ export default function Page() {
         }),
     );
     const { id: userId } = useUserStore();
-    const syncIcon =
+    const syncIconClassName =
         sync === "wait"
             ? "icon-[mdi--cloud-minus-outline]"
             : sync === "syncing"
@@ -64,8 +73,37 @@ export default function Page() {
         budgetContainer,
         0,
     );
+
+    const allLoaded = useRef(false);
+    // 有预算时需要加载全部bills
+    useLayoutEffect(() => {
+        if (!allLoaded.current && budgets.length > 0) {
+            useLedgerStore.getState().refreshBillList();
+            allLoaded.current = true;
+        }
+    }, [budgets.length]);
+
+    // 滚动时需要加载全部bills
+    const onItemShow = useCallback((index: number) => {
+        if (!allLoaded.current && index >= 120) {
+            useLedgerStore.getState().refreshBillList();
+            allLoaded.current = true;
+        }
+    }, []);
+
+    const presence = useMemo(() => {
+        if (ledgerAnimationShows) {
+            return false;
+        }
+        return true;
+    }, []);
+
+    // safari capable
+    useEffect(() => {
+        ledgerAnimationShows = true;
+    }, []);
     return (
-        <div className="w-full h-full p-2 flex flex-col overflow-hidden">
+        <div className="w-full h-full p-2 flex flex-col overflow-hidden page-show">
             <div className="flex flex-wrap flex-col w-full gap-2">
                 <div className="bg-stone-800 text-background dark:bg-foreground/20 dark:text-foreground relative h-20 w-full flex justify-end rounded-lg sm:flex-1 p-4">
                     <span className="absolute top-2 left-4">{t("Today")}</span>
@@ -107,7 +145,7 @@ export default function Page() {
                     </div>
                 </div>
             </div>
-            <div className="flex justify-between items-center pl-7 pr-5 py-1">
+            <div className="flex justify-between items-center pl-7 pr-5 py-1 h-8">
                 <button
                     className="cursor-pointer"
                     type="button"
@@ -141,7 +179,11 @@ export default function Page() {
                             StorageAPI.toSync();
                         }}
                     >
-                        <i className={cn(syncIcon)} />
+                        {sync === "syncing" ? (
+                            <CloudLoopIcon width={16} height={16} />
+                        ) : (
+                            <i className={syncIconClassName}></i>
+                        )}
                     </button>
                 </HintTooltip>
             </div>
@@ -153,6 +195,8 @@ export default function Page() {
                             className={cn(bills.length > 0 && "relative")}
                             enableDivideAsOrdered
                             showTime
+                            onItemShow={onItemShow}
+                            presence={presence}
                         />
                     ) : (
                         <div className="text-xs p-4 text-center">
