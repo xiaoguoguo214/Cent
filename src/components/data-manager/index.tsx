@@ -16,8 +16,17 @@ import {
     ImportPreviewProvider,
     importFromPreviewResult,
     showImportPreview,
-} from "./preview";
-import { SmartImportProvider, showSmartImport } from "./smart-import";
+} from "./preview-form";
+import { SmartImport } from "./smart-import";
+
+const [SmartImportProvider, showSmartImport] = createConfirmProvider(
+    SmartImport,
+    {
+        dialogTitle: "Smart Import",
+        contentClassName:
+            "h-full w-full max-h-full max-w-full rounded-none sm:rounded-md sm:max-h-[55vh] sm:w-[90vw] sm:max-w-[500px]",
+    },
+);
 
 const betaClassName = `relative after:content-['beta'] after:rounded after:bg-yellow-400 after:px-[2px] after:text-[8px] after:block after:absolute after:top-0 after:right-0 after:translate-x-[calc(100%+4px)]`;
 
@@ -132,7 +141,10 @@ function Form({ onCancel }: { onCancel?: () => void }) {
                     <div className="flex flex-col px-4 gap-2">
                         <Button
                             variant="outline"
-                            className="py-4"
+                            className={cn(
+                                betaClassName,
+                                "py-4 after:translate-x-[calc(50%-4px)] after:translate-y-[-4px]",
+                            )}
                             onClick={toShrinkData}
                         >
                             {t("bill-compression")}

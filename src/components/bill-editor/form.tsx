@@ -1,7 +1,6 @@
 import { Switch } from "radix-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { DefaultCurrencies } from "@/api/currency/currencies";
 import useCategory from "@/hooks/use-category";
 import { useCurrency } from "@/hooks/use-currency";
 import { useTag } from "@/hooks/use-tag";
@@ -15,6 +14,7 @@ import type { EditBill } from "@/store/ledger";
 import { usePreferenceStore } from "@/store/preference";
 import { cn } from "@/utils";
 import { getPredictNow } from "@/utils/predict";
+import { showTagList } from "../bill-tag";
 import { showCategoryList } from "../category";
 import { CategoryItem } from "../category/item";
 import { DatePicker } from "../date-picker";
@@ -34,6 +34,7 @@ import {
 } from "../ui/select";
 import { goAddBill } from ".";
 import { RemarkHint } from "./remark";
+import TagGroupSelector from "./tag-group";
 
 const defaultBill = {
     type: "expense" as Bill["type"],
@@ -56,7 +57,8 @@ export default function EditorForm({
         onCancel?.();
     };
 
-    const { baseCurrency, convert } = useCurrency();
+    const { baseCurrency, convert, quickCurrencies, allCurrencies } =
+        useCurrency();
 
     const { incomes, expenses, categories: allCategories } = useCategory();
 
@@ -99,7 +101,7 @@ export default function EditorForm({
         return init;
     });
 
-    const { tags, add: addTag } = useTag();
+    const { grouped } = useTag();
 
     const categories = billState.type === "expense" ? expenses : incomes;
 
@@ -161,9 +163,36 @@ export default function EditorForm({
         }
     }, [monitorFocused, toConfirm]);
 
-    const targetCurrency = DefaultCurrencies.find(
-        (c) => c.id === (billState.currency?.target ?? baseCurrency.id),
-    )!;
+    const targetCurrency =
+        allCurrencies.find(
+            (c) => c.id === (billState.currency?.target ?? baseCurrency.id),
+        ) ?? baseCurrency;
+
+    const changeCurrency = (newCurrencyId: string) =>
+        setBillState((prev) => {
+            if (newCurrencyId === baseCurrency.id) {
+                return {
+                    ...prev,
+                    amount: prev.currency?.amount ?? prev.amount,
+                    currency: undefined,
+                };
+            }
+            const { predict } = convert(
+                amountToNumber(prev.currency?.amount ?? prev.amount),
+                newCurrencyId,
+                baseCurrency.id,
+                prev.time,
+            );
+            return {
+                ...prev,
+                amount: numberToAmount(predict),
+                currency: {
+                    base: baseCurrency.id,
+                    target: newCurrencyId,
+                    amount: prev.currency?.amount ?? prev.amount,
+                },
+            };
+        });
 
     const calculatorInitialValue = billState?.currency
         ? amountToNumber(billState.currency.amount)
@@ -243,61 +272,33 @@ export default function EditorForm({
                             </Switch.Root>
                         </div>
                         <div className="flex-1 flex bg-stone-400 focus:outline rounded-lg ml-2 px-2 relative">
-                            <Select
-                                value={targetCurrency.id}
-                                onValueChange={(newCurrencyId) => {
-                                    setBillState((prev) => {
-                                        if (newCurrencyId === baseCurrency.id) {
-                                            return {
-                                                ...prev,
-                                                amount:
-                                                    prev.currency?.amount ??
-                                                    prev.amount,
-                                                currency: undefined,
-                                            };
-                                        }
-                                        const { predict } = convert(
-                                            amountToNumber(
-                                                prev.currency?.amount ??
-                                                    prev.amount,
-                                            ),
-                                            newCurrencyId,
-                                            baseCurrency.id,
-                                            prev.time,
-                                        );
-                                        return {
-                                            ...prev,
-                                            amount: numberToAmount(predict),
-                                            currency: {
-                                                base: baseCurrency.id,
-                                                target: newCurrencyId,
-                                                amount:
-                                                    prev.currency?.amount ??
-                                                    prev.amount,
-                                            },
-                                        };
-                                    });
-                                }}
-                            >
-                                <div className="flex items-center">
-                                    <SelectTrigger className="w-fit outline-none ring-none border-none shadow-none p-0 [&_svg]:hidden">
-                                        <div className="flex items-center font-semibold text-2xl text-white">
-                                            {targetCurrency?.symbol}
-                                        </div>
-                                    </SelectTrigger>
-                                </div>
-                                <SelectContent>
-                                    {DefaultCurrencies.map((currency) => (
-                                        <SelectItem
-                                            key={currency.id}
-                                            value={currency.id}
-                                        >
-                                            {t(currency.labelKey)}
-                                            {`(${currency.symbol})`}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {quickCurrencies.length > 0 && (
+                                <Select
+                                    value={targetCurrency?.id}
+                                    onValueChange={(newCurrencyId) => {
+                                        changeCurrency(newCurrencyId);
+                                    }}
+                                >
+                                    <div className="flex items-center">
+                                        <SelectTrigger className="w-fit outline-none ring-none border-none shadow-none p-0 [&_svg]:hidden">
+                                            <div className="flex items-center font-semibold text-2xl text-white">
+                                                {targetCurrency?.symbol}
+                                            </div>
+                                        </SelectTrigger>
+                                    </div>
+                                    <SelectContent>
+                                        {quickCurrencies.map((currency) => (
+                                            <SelectItem
+                                                key={currency.id}
+                                                value={currency.id}
+                                            >
+                                                {currency.label}
+                                                {`(${currency.symbol})`}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                             <button
                                 ref={monitorRef}
                                 type="button"
@@ -307,16 +308,22 @@ export default function EditorForm({
                                 onBlur={() => {
                                     setMonitorFocused(false);
                                 }}
-                                className="flex-1 flex flex-col justify-center items-end overflow-x-scroll"
+                                className="flex-1 flex flex-col justify-center items-end overflow-x-scroll outline-none"
                             >
                                 {billState.currency && (
                                     <div className="absolute text-white text-[8px] top-0">
                                         ≈ {baseCurrency.symbol}{" "}
                                         {amountToNumber(billState.amount)}{" "}
-                                        {t(baseCurrency.labelKey)}
+                                        {baseCurrency.label}
                                     </div>
                                 )}
-                                <Calculator.Value className="text-white text-3xl font-semibold text-right bg-transparent"></Calculator.Value>
+                                <Calculator.Value
+                                    className={cn(
+                                        "text-white text-3xl font-semibold text-right bg-transparent after:inline-block after:content-['|'] after:opacity-0 after:font-thin after:translate-y-[-3px] ",
+                                        monitorFocused &&
+                                            "after:animate-caret-blink",
+                                    )}
+                                ></Calculator.Value>
                                 {billState.amount < 0 && (
                                     <div className="absolute text-red-700 text-[8px] bottom-0">
                                         {t("bill-negative-tip")}
@@ -395,56 +402,40 @@ export default function EditorForm({
                 </div>
                 {/* tags */}
                 <div className="w-full h-[40px] flex-shrink-0 flex-grow-0 flex gap-1 py-1 items-center overflow-x-auto px-2 text-sm font-medium scrollbar-hidden">
-                    {tags.map((tag) => (
-                        <Tag
-                            key={tag.id}
-                            checked={billState.tagIds?.includes(tag.id)}
-                            onCheckedChange={(checked) => {
-                                setBillState((prev) => {
-                                    const newV = { ...prev };
-                                    if (checked) {
-                                        newV.tagIds = Array.from(
-                                            new Set([
-                                                ...(newV.tagIds ?? []),
-                                                tag.id,
-                                            ]),
-                                        );
-                                    } else {
-                                        newV.tagIds = newV.tagIds?.filter(
-                                            (t) => t !== tag.id,
-                                        );
-                                    }
-                                    return newV;
-                                });
-                            }}
-                        >
-                            #{tag.name}
-                        </Tag>
-                    ))}
+                    <TagGroupSelector
+                        isCreate={isCreate}
+                        selectedTags={billState.tagIds}
+                        onSelectChange={(newTagIds, extra) => {
+                            setBillState((prev) => ({
+                                ...prev,
+                                tagIds: newTagIds,
+                            }));
+                            if (extra?.preferCurrency) {
+                                changeCurrency(extra.preferCurrency);
+                            }
+                        }}
+                    />
                     <button
                         type="button"
                         className={cn(
                             `rounded-lg border py-1 px-2 my-1 mr-1 h-8 flex gap-2 items-center justify-center whitespace-nowrap cursor-pointer`,
                         )}
-                        onClick={async () => {
-                            try {
-                                const tagName = prompt(t("input-new-tag-name"));
-                                if (tagName === null || tagName === undefined) {
-                                    return;
-                                }
-                                await addTag({ name: tagName });
-                            } catch (error) {
-                                toast.error((error as any).message);
-                            }
+                        onClick={() => {
+                            showTagList();
                         }}
                     >
-                        <i className="icon-[mdi--tag-plus-outline]"></i>
-                        {t("add-tag")}
+                        <i className="icon-[mdi--tag-text-outline]"></i>
+                        {t("edit-tags")}
                     </button>
                 </div>
 
                 {/* keyboard area */}
-                <div className="keyboard-field min-h-[max(min(calc(100%-264px),480px),362px)] max-h-[calc(100%-264px)] sm:min-h-[max(min(calc(100%-264px),380px),362px)] flex gap-2 flex-col justify-start bg-stone-900 sm:rounded-b-md text-[white] p-2 pb-[max(env(safe-area-inset-bottom),8px)]">
+                <div
+                    className={cn(
+                        "h-[calc(480px+160px*(var(--bekh,0.5)-0.5))] sm:h-[calc(380px+160px*(var(--bekh,0.5)-0.5))] min-h-[264px] max-h-[calc(100%-124px)]",
+                        "keyboard-field flex gap-2 flex-col justify-start bg-stone-900 sm:rounded-b-md text-[white] p-2 pb-[max(env(safe-area-inset-bottom),8px)]",
+                    )}
+                >
                     <div className="flex justify-between items-center">
                         <div className="flex gap-2 items-center h-10">
                             <div className="flex items-center h-full">

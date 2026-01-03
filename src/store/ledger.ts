@@ -4,6 +4,7 @@ import { v4 } from "uuid";
 import { create } from "zustand";
 import type { UserInfo } from "@/api/endpoints/type";
 import { loadStorageAPI } from "@/api/storage/dynamic";
+import { showBookGuide } from "@/components/book/util";
 import type { Action, Full, OutputType, Update } from "@/database/stash";
 import type { Bill, GlobalMeta, PersonalMeta } from "@/ledger/type";
 import { t } from "@/locale";
@@ -156,10 +157,7 @@ export const useLedgerStore = create<LedgerStore>()((set, get) => {
                         action: {
                             label: t("Go"),
                             onClick: () => {
-                                useBookStore.setState((prev) => ({
-                                    ...prev,
-                                    visible: true,
-                                }));
+                                showBookGuide();
                             },
                         },
                     },
@@ -325,15 +323,19 @@ export const useLedgerStore = create<LedgerStore>()((set, get) => {
             const repo = getCurrentFullRepoName();
             const prevMeta = await StorageAPI.getMeta(repo);
             const uid = useUserStore.getState().id;
-            const personalMeta =
+            const personalMeta: PersonalMeta =
                 (prevMeta as GlobalMeta | undefined)?.personal?.[uid] ?? {};
             const newPersonalMeta =
                 typeof v === "function"
                     ? v(personalMeta)
-                    : merge(personalMeta, v);
-            const newMeta = merge(prevMeta, {
-                personal: { [uid]: newPersonalMeta },
-            });
+                    : { ...personalMeta, ...v };
+            const newMeta = {
+                ...prevMeta,
+                personal: {
+                    ...prevMeta.personal,
+                    [uid]: newPersonalMeta,
+                },
+            };
             await StorageAPI.batch(repo, [
                 {
                     type: "meta",

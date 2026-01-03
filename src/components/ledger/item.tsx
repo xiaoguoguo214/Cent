@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { DefaultCurrencies } from "@/api/currency/currencies";
 import useCategory from "@/hooks/use-category";
 import { useCreators } from "@/hooks/use-creator";
 import { useCurrency } from "@/hooks/use-currency";
@@ -11,6 +10,7 @@ import { useUserStore } from "@/store/user";
 import { cn } from "@/utils";
 import { denseTime, shortTime } from "@/utils/time";
 import CategoryIcon from "../category/icon";
+import Money from "../money";
 
 interface BillItemProps {
     bill: Bill;
@@ -41,11 +41,11 @@ export default function BillItem({
         ?.map((id) => allTags.find((t) => t.id === id))
         .filter((v) => v !== undefined);
 
-    const { baseCurrency } = useCurrency();
+    const { baseCurrency, allCurrencies } = useCurrency();
     const currency =
         bill.currency?.target === baseCurrency.id
             ? undefined
-            : DefaultCurrencies.find((c) => c.id === bill.currency?.target);
+            : allCurrencies.find((c) => c.id === bill.currency?.target);
     return (
         <button
             type="button"
@@ -101,12 +101,14 @@ export default function BillItem({
                               : ""
                     }`}
                 >
-                    {amountToNumber(bill.amount)}
+                    <Money value={amountToNumber(bill.amount)} />
 
                     {currency && (
                         <div className="text-xs">
                             {currency.symbol}
-                            {amountToNumber(bill.currency!.amount)}
+                            <Money
+                                value={amountToNumber(bill.currency!.amount)}
+                            />
                         </div>
                     )}
                 </div>

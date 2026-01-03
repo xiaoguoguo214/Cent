@@ -1,4 +1,3 @@
-import { DefaultCurrencies } from "@/api/currency/currencies";
 import useCategory from "@/hooks/use-category";
 import { useCreators } from "@/hooks/use-creator";
 import { useCurrency } from "@/hooks/use-currency";
@@ -24,7 +23,7 @@ export default function BillInfo({
     const t = useIntl();
     const { id: curUserId } = useUserStore();
     const { categories } = useCategory();
-    const { baseCurrency } = useCurrency();
+    const { baseCurrency, allCurrencies } = useCurrency();
 
     const creators = useCreators();
     const creator = creators.find((c) => c.id === edit?.creatorId);
@@ -64,7 +63,7 @@ export default function BillInfo({
     const currency =
         edit.currency?.target === baseCurrency.id
             ? undefined
-            : DefaultCurrencies.find((c) => c.id === edit.currency?.target);
+            : allCurrencies.find((c) => c.id === edit.currency?.target);
     return (
         <div>
             <div className="min-h-[320px] p-4 flex flex-col w-full h-full">
@@ -111,13 +110,13 @@ export default function BillInfo({
                             <div>{t("time")}:</div>
                             <div>{formatTime(edit.time)}</div>
                         </div>
-                        {currency && (
+                        {currency !== undefined && (
                             <div className="flex justify-between items-center my-1 gap-2">
                                 <div>币种:</div>
                                 <div>
                                     {currency.symbol}
                                     {amountToNumber(edit.currency!.amount)}{" "}
-                                    {t(currency.labelKey)}
+                                    {currency.label}
                                 </div>
                             </div>
                         )}
@@ -127,7 +126,7 @@ export default function BillInfo({
                                 <div>{`(${edit.location.latitude.toFixed(4)},${edit.location.longitude.toFixed(4)})`}</div>
                             </div>
                         )}
-                        {tags?.length && (
+                        {(tags?.length ?? 0) > 0 && (
                             <div className="flex justify-between items-start my-1">
                                 <div>{t("tags")}:</div>
                                 <div className="flex flex-wrap gap-1 justify-end max-w-[80%]">

@@ -5,11 +5,13 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    useState,
 } from "react";
 import { useShallow } from "zustand/shallow";
 import { StorageAPI } from "@/api/storage";
 import CloudLoopIcon from "@/assets/icons/cloud-loop.svg?react";
 import AnimatedNumber from "@/components/animated-number";
+import { showBookGuide } from "@/components/book/util";
 import BudgetCard from "@/components/budget/card";
 import { HintTooltip } from "@/components/hint";
 import { PaginationIndicator } from "@/components/indicator";
@@ -25,6 +27,7 @@ import { useLedgerStore } from "@/store/ledger";
 import { useUserStore } from "@/store/user";
 import { cn } from "@/utils";
 import { filterOrderedBillListByTimeRange } from "@/utils/filter";
+import { denseDate } from "@/utils/time";
 
 let ledgerAnimationShows = false;
 
@@ -46,27 +49,31 @@ export default function Page() {
               ? "icon-[line-md--cloud-alt-print-loop]"
               : sync === "success"
                 ? "icon-[mdi--cloud-check-outline]"
-                : "icon-[mdi--cloud-remove-outline]";
+                : "icon-[mdi--cloud-remove-outline] text-red-600";
 
-    const todayBills = useMemo(() => {
-        const now = dayjs();
+    const [currentDate, setCurrentDate] = useState(dayjs());
+    const ledgerRef = useRef<any>(null);
+
+    const currentDateBills = useMemo(() => {
         const today = filterOrderedBillListByTimeRange(bills, [
-            now.startOf("day"),
-            now.endOf("day"),
+            currentDate.startOf("day"),
+            currentDate.endOf("day"),
         ]);
         return today;
-    }, [bills]);
+    }, [bills, currentDate]);
 
-    const todayAmount = useMemo(() => {
+    const currentDateAmount = useMemo(() => {
         return amountToNumber(
-            todayBills.reduce((p, c) => {
+            currentDateBills.reduce((p, c) => {
                 return p + c.amount * (c.type === "income" ? 1 : -1);
             }, 0),
         );
-    }, [todayBills]);
+    }, [currentDateBills]);
 
     const { budgets: allBudgets } = useBudget();
-    const budgets = allBudgets.filter((b) => b.joiners.includes(userId));
+    const budgets = allBudgets.filter((b) => {
+        return b.joiners.includes(userId) && b.start < Date.now();
+    });
 
     const budgetContainer = useRef<HTMLDivElement>(null);
     const { count: budgetCount, index: curBudgetIndex } = useSnap(
@@ -84,6 +91,20 @@ export default function Page() {
     }, [budgets.length]);
 
     // 滚动时需要加载全部bills
+    const onDateClick = useCallback(
+        (date: dayjs.Dayjs) => {
+            setCurrentDate(date);
+            const index = bills.findIndex((bill) => {
+                const billDate = dayjs.unix(bill.time / 1000);
+                return billDate.isSame(date, "day");
+            });
+            if (index >= 0) {
+                ledgerRef.current?.scrollToIndex(index);
+            }
+        },
+        [bills],
+    );
+
     const onItemShow = useCallback((index: number) => {
         if (!allLoaded.current && index >= 120) {
             useLedgerStore.getState().refreshBillList();
@@ -106,9 +127,11 @@ export default function Page() {
         <div className="w-full h-full p-2 flex flex-col overflow-hidden page-show">
             <div className="flex flex-wrap flex-col w-full gap-2">
                 <div className="bg-stone-800 text-background dark:bg-foreground/20 dark:text-foreground relative h-20 w-full flex justify-end rounded-lg sm:flex-1 p-4">
-                    <span className="absolute top-2 left-4">{t("Today")}</span>
+                    <span className="absolute top-2 left-4">
+                        {denseDate(currentDate)}
+                    </span>
                     <AnimatedNumber
-                        value={todayAmount}
+                        value={currentDateAmount}
                         className="font-bold text-4xl "
                     />
                     {currentBook && (
@@ -116,10 +139,7 @@ export default function Page() {
                             type="button"
                             className="absolute bottom-2 left-4 text-xs opacity-60 flex items-center gap-1 cursor-pointer"
                             onClick={() => {
-                                useBookStore.setState((prev) => ({
-                                    ...prev,
-                                    visible: true,
-                                }));
+                                showBookGuide();
                             }}
                         >
                             <i className="icon-[mdi--book]"></i>
@@ -147,7 +167,7 @@ export default function Page() {
             </div>
             <div className="flex justify-between items-center pl-7 pr-5 py-1 h-8">
                 <button
-                    className="cursor-pointer"
+                    className="cursor-pointer flex items-center"
                     type="button"
                     onClick={() => {
                         if (loading) {
@@ -157,7 +177,7 @@ export default function Page() {
                     }}
                 >
                     <div className={cn("opacity-0", loading && "opacity-100")}>
-                        <Loading />
+                        <Loading className="[&_i]:size-[18px]" />
                     </div>
                 </button>
                 <div>
@@ -174,15 +194,17 @@ export default function Page() {
                 >
                     <button
                         type="button"
-                        className="cursor-pointer"
+                        className="cursor-pointer flex items-center"
                         onClick={() => {
                             StorageAPI.toSync();
                         }}
                     >
                         {sync === "syncing" ? (
-                            <CloudLoopIcon width={16} height={16} />
+                            <CloudLoopIcon width={18} height={18} />
                         ) : (
-                            <i className={syncIconClassName}></i>
+                            <i
+                                className={cn(syncIconClassName, "size-[18px]")}
+                            ></i>
                         )}
                     </button>
                 </HintTooltip>
@@ -191,11 +213,14 @@ export default function Page() {
                 <div className="w-full h-full">
                     {bills.length > 0 ? (
                         <Ledger
+                            ref={ledgerRef}
                             bills={bills}
                             className={cn(bills.length > 0 && "relative")}
                             enableDivideAsOrdered
                             showTime
                             onItemShow={onItemShow}
+                            onVisibleDateChange={setCurrentDate}
+                            onDateClick={onDateClick}
                             presence={presence}
                         />
                     ) : (

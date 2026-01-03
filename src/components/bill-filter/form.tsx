@@ -1,7 +1,7 @@
 import { type Dispatch, type SetStateAction, useMemo } from "react";
-import { DefaultCurrencies } from "@/api/currency/currencies";
 import useCategory from "@/hooks/use-category";
 import { useCreators } from "@/hooks/use-creator";
+import { useCurrency } from "@/hooks/use-currency";
 import { useTag } from "@/hooks/use-tag";
 import type { BillCategory, BillFilter, BillType } from "@/ledger/type";
 import { useIntl } from "@/locale";
@@ -133,13 +133,13 @@ export default function BillFilterForm({
             .join(",");
     };
 
-    const allCurrencies = DefaultCurrencies;
+    const { allCurrencies } = useCurrency();
     const formatCurrencies = (ids?: (number | string)[]) => {
         if (ids === undefined || ids.length === 0) {
             return t("unlimited");
         }
         return ids
-            .map((id) => t(allCurrencies.find((v) => v.id === id)!.labelKey))
+            .map((id) => allCurrencies.find((v) => v.id === id)!.label)
             .join(",");
     };
     return (
@@ -384,7 +384,7 @@ export default function BillFilterForm({
                                     });
                                 }}
                             >
-                                {t(item.labelKey)}
+                                {item.label}
                             </DropdownMenuCheckboxItem>
                         ))}
                     </DropdownMenuContent>
@@ -448,56 +448,110 @@ export default function BillFilterForm({
                 </DropdownMenu>
             </div>
             {/* tags selector */}
-            <div className="w-full flex justify-between items-center">
-                <div className="flex items-center gap-1">
+            <div className="w-full flex justify-between items-center gap-2 overflow-hidden">
+                <div className="flex items-center gap-1 flex-shrink-0">
                     <i className="icon-[mdi--tag-outline]"></i>
                     {t("tags")}:
                 </div>
-
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="outline"
-                            className="px-2 md:px-4 py-2 text-xs md:text-sm"
-                        >
-                            <div className="max-w-[120px] truncate">
-                                {formatTags(form.tags)}
-                            </div>
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56" align="end">
-                        {allTags.map((item) => (
-                            <DropdownMenuCheckboxItem
-                                key={item.id}
-                                checked={
-                                    form.tags
-                                        ? form.tags.includes(item.id)
-                                        : true
-                                }
-                                onCheckedChange={(v) => {
-                                    setForm((prev) => {
-                                        const set = new Set(
-                                            prev.tags ??
-                                                allTags.map((c) => c.id),
-                                        );
-                                        if (v) {
-                                            set.add(item.id);
-                                        } else {
-                                            set.delete(item.id);
+                <div className="flex items-center gap-4 overflow-y-auto scrollbar-hidden">
+                    <div className="flex items-center gap-2">
+                        <div className="flex-shrink-0">
+                            {t("tags-excluded-short")}
+                        </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="px-2 md:px-4 py-2 text-xs md:text-sm"
+                                >
+                                    <div className="max-w-[120px] truncate">
+                                        {formatTags(form.excludeTags)}
+                                    </div>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-56" align="end">
+                                {allTags.map((item) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={item.id}
+                                        checked={form.excludeTags?.includes(
+                                            item.id,
+                                        )}
+                                        onCheckedChange={(v) => {
+                                            setForm((prev) => {
+                                                const set = new Set(
+                                                    prev.excludeTags ?? [],
+                                                );
+                                                if (v) {
+                                                    set.add(item.id);
+                                                } else {
+                                                    set.delete(item.id);
+                                                }
+                                                const newTags = Array.from(set);
+                                                return {
+                                                    ...prev,
+                                                    excludeTags: newTags,
+                                                };
+                                            });
+                                        }}
+                                    >
+                                        {item.name}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex-shrink-0">
+                            {t("tags-include-short")}
+                        </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="px-2 md:px-4 py-2 text-xs md:text-sm"
+                                >
+                                    <div className="max-w-[120px] truncate">
+                                        {formatTags(form.tags)}
+                                    </div>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-56" align="end">
+                                {allTags.map((item) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={item.id}
+                                        checked={
+                                            form.tags
+                                                ? form.tags.includes(item.id)
+                                                : true
                                         }
-                                        const newTags = Array.from(set);
-                                        return {
-                                            ...prev,
-                                            tags: newTags,
-                                        };
-                                    });
-                                }}
-                            >
-                                {item.name}
-                            </DropdownMenuCheckboxItem>
-                        ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                                        onCheckedChange={(v) => {
+                                            setForm((prev) => {
+                                                const set = new Set(
+                                                    prev.tags ??
+                                                        allTags.map(
+                                                            (c) => c.id,
+                                                        ),
+                                                );
+                                                if (v) {
+                                                    set.add(item.id);
+                                                } else {
+                                                    set.delete(item.id);
+                                                }
+                                                const newTags = Array.from(set);
+                                                return {
+                                                    ...prev,
+                                                    tags: newTags,
+                                                };
+                                            });
+                                        }}
+                                    >
+                                        {item.name}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </div>
             </div>
             {/* other checkboxes */}
             <div className="w-full flex justify-between items-center">

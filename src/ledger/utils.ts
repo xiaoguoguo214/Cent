@@ -87,6 +87,13 @@ const isTagsMatched = (bill: Bill, tagIds?: string[]) => {
         : true;
 };
 
+const isExcludeTagsMatched = (bill: Bill, tagIds?: string[]) => {
+    if ((tagIds?.length ?? 0) === 0) {
+        return true;
+    }
+    return tagIds?.every((excludeTag) => !bill.tagIds?.includes(excludeTag));
+};
+
 const isCurrenciesMatched = (
     bill: Bill,
     base: string,
@@ -111,7 +118,8 @@ export const isBillMatched = (bill: Bill, filter: BillFilter) => {
             bill,
             filter.baseCurrency ?? DefaultBaseCurrencyId,
             filter.currencies,
-        )
+        ) &&
+        isExcludeTagsMatched(bill, filter.excludeTags)
     );
 };
 
@@ -131,6 +139,20 @@ export const treeCategories = (categories: BillCategory[]) => {
         },
         [] as (BillCategory & { children: BillCategory[] })[],
     );
+};
+
+/** 检查target 分类是否与source分类相同，或者是source的子类 */
+export const isSameOrChildCategory = (
+    source: string,
+    target: string,
+    allCategories: BillCategory[],
+) => {
+    const targetCategory = allCategories.find((c) => c.id === target);
+    if (!targetCategory || !targetCategory.parent) {
+        return source === target;
+    }
+
+    return source === targetCategory.parent;
 };
 
 export const intlCategory = <
